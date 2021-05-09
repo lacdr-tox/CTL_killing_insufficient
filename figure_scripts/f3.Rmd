@@ -1,0 +1,136 @@
+---
+title: "f3"
+output: html_document
+---
+
+Updated figure 3. Since CTL with k=16 cannot control the tumour then it makes sense to next put forward
+our theory for how the tumour could be controled.
+
+Therefore we will plot +/- IFN; k4/k16. Tumor volumes. nice pictures.
+
+load required data:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir ="/home/richard/Documents/000_phd_archive/can_res_19")
+
+```
+
+```{r, echo=FALSE}
+kis4 <- bquote('k = 4 CTL' ^-1 ~'day' ^-1)
+kis16 <- bquote('k = 16 CTL' ^-1 ~'day' ^-1)
+
+size<-1e-6
+odedata<- read.csv("data/odedata/odedata.csv")
+raw <- read.csv('data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+means<-read.csv('data/mousedata/means.csv')
+growthdata <- subset(means,group=='regression')
+names(growthdata)[2]<-'id'
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+setwd("data/processedStats")
+filelist<-list.files()
+filelist<-c("n1_k4_edge_0.csv" , "n1_k16_edge_0.csv",
+            "IFNn1_k4_edge_0.csv" , "IFNn1_k16_edge_0.csv" )
+
+stats<-lapply(filelist,read.csv,stringsAsFactors=FALSE)
+stats <- do.call(rbind,stats)
+stats[stats==0]<-NA
+stats$condition<-stats$id
+
+stats$condition[stats$condition=="n1_k4_edge_0"]<-"-ifn"
+stats$condition[stats$condition=="n1_k16_edge_0"]<-"-ifn"
+stats$condition[stats$condition=="IFNn1_k4_edge_0"]<-"+ifn"
+stats$condition[stats$condition=="IFNn1_k16_edge_0"]<-"+ifn"
+
+stats[stats=="n1_k4_edge_0"]<-"k =  4"
+stats[stats=="n1_k16_edge_0"]<-"k = 16"
+stats[stats=="IFNn1_k4_edge_0"]<-"k =  4"
+stats[stats=="IFNn1_k16_edge_0"]<-"k = 16"
+
+```
+```{r,echo=FALSE}
+require(ggplot2)
+require(zoo)
+winsize<-60
+
+stats$volmed[stats$time>10.5 & stats$condition=="-ifn"]<-NA
+stats$volmin[stats$time>10.5 & stats$condition=="-ifn"]<-NA
+stats$volmax[stats$time>10.5 & stats$condition=="-ifn"]<-NA
+stats$tcellmed[stats$time>10.5 & stats$condition=="-ifn"]<-NA
+stats$confracmed[stats$time>10.5 & stats$condition=="-ifn"]<-NA
+# colorblind palette with black:
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+```
+
+tumour size figure
+
+```{r, echo=FALSE}
+p <- ggplot(stats,aes(x=time))+
+ # geom_point(data=rawgrowth,aes(x=time,y=volume*10^6,shape="no transfer data"),size=4)+
+  geom_ribbon(data=stats,aes(x = time, ymin=volmin,ymax=volmax,alpha=0.01,linetype=NA,group=interaction(condition,id)), show.legend = FALSE)+
+  geom_point(data=rawreg,aes(x=time,y=volume*10^6,shape="transfer data"),size=4,show.legend = FALSE)+
+  geom_line(aes(y=volmed, color=id,linetype=condition),size=1.5)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14),limits=c(5,14))+
+  scale_y_log10(name=bquote('number of tumour cells'),limits=c(1000,10^8))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+  #scale_linetype_manual("mode,values=c(1,6),labels=c("k = 4","k = 16","in-vivo data"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+```
+
+Conjugate fraction figure:
+
+```{r, echo=FALSE}
+
+p <- ggplot(stats,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=rollmean(confracmed,winsize,na.pad=TRUE),linetype=condition),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=confracmin,ymax=confracmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",limits=c(5,14),breaks=c(6,8,10,12,14))+
+  scale_y_continuous(name="CTL conjugate fraction", limits=c(0.2,1))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+```
+
+```{r,echo=FALSE}
+
+p <- ggplot(stats,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=tcellmed,linetype=condition),size=2)+
+  #geom_ribbon(aes(x = time, ymin=tcellmin,ymax=tcellmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_log10(name="number of CTLs")+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+```
+
+
+```{r,echo=FALSE}
+
+
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=1440*realisedmed,linetype=condition),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=1440*realisedmed,ymax=1440*realisedmed,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_continuous(name="realised",limits=c(0,40))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position="none",legend.key = element_blank())
+plot(p)
+
+```

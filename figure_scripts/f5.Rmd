@@ -1,0 +1,62 @@
+---
+title: "f5"
+output: html_document
+--- 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir ="/home/richard/Documents/000_phd_archive/can_res_19")
+
+```
+
+```{r, echo=FALSE}
+
+
+size<-1e-6
+
+raw <- read.csv('data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+means<-read.csv('data/mousedata/means.csv')
+growthdata <- subset(means,group=='regression')
+names(growthdata)[2]<-'id'
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+setwd("data/processedStats")
+filelist<-list.files()
+filelist<-c("growth.csv","mixed.csv" )
+
+stats<-lapply(filelist,read.csv,stringsAsFactors=FALSE)
+statsGrowth <- stats[[1]]
+statsMix <- stats[[2]]
+
+statsMix[statsMix==0]<-NA
+
+
+statsGrowth[statsGrowth==0]<-NA
+
+
+
+
+```
+
+
+
+```{r,echo=FALSE}
+require(ggplot2)
+
+
+p <- ggplot(data=statsGrowth,aes(x=time))+
+
+  geom_line(data=statsMix, aes(y=eg7med,color="EG7"),size=2,linetype=1)+
+  geom_line(data=statsMix, aes(y=volmed-eg7med,color="EL4"), linetype=2,size=2)+
+  geom_line(data=statsGrowth, aes(y=volmed/2,color="no_transfer"), linetype=3,size=2)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('number of tumour cells'))+
+  scale_colour_manual(values=c(cbbPalette[8],cbbPalette[6],cbbPalette[4]),labels=c("EG7 (transfer)","EL4 (transfer)","EL4 (no transfer)"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+
+```

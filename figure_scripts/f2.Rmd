@@ -1,0 +1,607 @@
+---
+title: "f2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir ="/home/richard/Documents/000_phd_archive/can_res_19")
+
+```
+
+load required data:
+
+Note that the output in data/processedStats can be generated from the output in data/stats by running the data/processStats.R script
+
+Note also the naming convention of the ABM files:
+
+"n1_k16_edge_0.csv" reads as:
+(n1) number of hits = 1; (k16) killing rate = 16 (CTL^-1 day^-1); (edge_0) edge infiltration set as false, so CTLs infiltrate tumour homogeneously. 
+
+```{r, echo=FALSE}
+require(zoo)
+
+## define useful names
+kis4 <- bquote('k = 4 CTL' ^-1 ~'day' ^-1)
+kis16 <- bquote('k = 16 CTL' ^-1 ~'day' ^-1)
+
+size<-1e-6
+odedata<- read.csv("data/odedata/odedata.csv")
+raw <- read.csv('data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+means<-read.csv('data/mousedata/means.csv')
+growthdata <- subset(means,group=='regression')
+names(growthdata)[2]<-'id'
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+setwd("data/processedStats")
+filelist<-list.files()
+filelist<-c("growth.csv",    "n1_k4_edge_0.csv" , "n1_k16_edge_0.csv" )
+
+stats<-lapply(filelist,read.csv,stringsAsFactors=FALSE)
+stats <- do.call(rbind,stats)
+stats[stats==0]<-NA
+stats[stats=="growth"]<-"no transfer"
+stats[stats=="n1_k4_edge_0"]<-"k =  4"
+stats[stats=="n1_k16_edge_0"]<-"k = 16"
+
+
+```
+
+
+
+
+```{r,echo=FALSE}
+require(ggplot2)
+require(zoo)
+winsize<-30
+transfer <- subset(stats,id!='no transfer')
+#transfer$volmed[transfer$time>11]<-NA
+notransfer <- subset(stats,id=='no transfer')
+# colorblind palette with black:
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+```
+
+Fig 2a)
+
+```{r,echo=FALSE}
+
+p <- ggplot(notransfer,aes(x=time))+
+    geom_line(aes(y=1440*exp(0.85*time),linetype="ODE"),size=1.5,color=cbbPalette[4])+
+  geom_point(data=rawgrowth,aes(x=time,y=volume*10^6,shape="no transfer data"),size=4)+
+  geom_line(aes(y=volmed,linetype="ABM"),size=1.5,color=cbbPalette[4])+
+
+
+  #geom_ribbon(data=stats,aes(x = time, ymin=volmin,ymax=volmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('number of tumour cells'))+
+  scale_linetype_manual("id",values=c(1,2),labels=c("ABM","ODE"))+
+  #scale_linetype_manual("mode,values=c(1,6),labels=c("k = 4","k = 16","in-vivo data"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank(),legend.key.width = unit(3,"line"))
+
+plot(p)
+
+p <- ggplot(transfer,aes(x=time))+
+  geom_point(data=rawreg,aes(x=time,y=volume*10^6,shape="transfer data"),size=4)+
+  geom_line(aes(y=volmed, color=id,linetype="ABM"),size=1.5)+
+  #geom_line(data=odedata,aes(y=volume,color=id,linetype="ODE"),size=1.5)+
+  #geom_ribbon(data=stats,aes(x = time, ymin=volmin,ymax=volmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('number of tumour cells'))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16,"no transfer"))+
+  scale_linetype_manual(values=c(1,2),labels=c("ABM","ODE"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank(),legend.key.width = unit(3,"line"))
+plot(p)
+
+```
+CTL conjugate fraction figure:
+
+```{r, echo=FALSE}
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=rollmean(confracmed,winsize,na.pad=TRUE)),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=confracmin,ymax=confracmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",limits=c(5,11),breaks=c(6,8,10,12,14))+
+  scale_y_continuous(name="CTL conjugate fraction", limits=c(0.3,1))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c(kis4,kis16))+
+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+```
+Killing per ctl figure ('realised' killing or killing/CTL)
+
+```{r,echo=FALSE}
+
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=1440*rollmean(realisedmed,winsize,na.pad = TRUE)),size=0.5)+
+  geom_ribbon(aes(x = time, ymin=1440*realisedmin,ymax=1440*realisedmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_continuous(name="realised killing rate",limits=c(0,25))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=1440*rollmean(measuredmed,winsize,na.pad = TRUE)),size=0.5)+
+  geom_ribbon(aes(x = time, ymin=1440*measuredmin,ymax=1440*measuredmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_continuous(name="measured killing rate",limits=c(0,25))+
+  scale_colour_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+  scale_fill_manual("id",values=cbbPalette[-1],labels=c("k =  4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.key = element_blank())
+plot(p)
+
+```
+
+```{r, echo=FALSE}
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=tcellmed),size=1.5)+
+  #geom_ribbon(aes(x = time, ymin=tmin,ymax=tmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_log10(name="CTL")+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k =  16","k =  4"))+
+  scale_fill_manual("id",values=c("navyblue","darkgreen"),labels=c("k =  16","k =  4"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.15,0.85),legend.key = element_blank())
+plot(p)
+
+```
+
+
+
+```{r, echo=FALSE}
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=conmed/tcellmed),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=conmin/tcellmed,ymax=conmax/tcellmed,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",limits=c(5,14),breaks=c(6,8,10,12,14))+
+  scale_y_continuous(name="CTL conjugate fraction", limits=c(0,1))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k =  16","k =  4"))+
+  scale_fill_manual("id",values=c("navyblue","darkgreen"),labels=c("k =  16","k =  4"))+
+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.85,0.90),legend.key = element_blank())
+plot(p)
+
+```
+
+```{r, echo=FALSE}
+size<-1e-6
+raw <- read.csv('data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+means<-read.csv('data/mousedata/means.csv')
+growthdata <- subset(means,group=='regression')
+names(growthdata)[2]<-'id'
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+setwd("data/processedStats")
+filelist<-list.files()
+
+input <- c("growth" , "n1_k4_edge_0", "n1_k16_edge_0" ) 
+ids <- c("no transfer", "k =  4", "k = 16")
+
+getStats <- function(folder){
+  
+  filename <- list.files(folder)[2]
+  
+  filepath <- paste(folder,filename,sep="/")
+  
+  file <- read.csv(filepath)
+  
+  id <- ids[input==folder]
+  
+  id <- rep(id,length(file$N))
+  file$id <- id
+  
+  return(file)
+  
+}
+
+stats <- lapply(input,getStats)
+stats <- do.call(rbind,stats)
+stats$deaths<-abs(stats$deaths)
+stats$rate<-1440*stats$deaths/stats$con
+
+```
+
+```{r, echo=FALSE}
+library(ggplot2)
+p <- ggplot(stats,aes(x=time))+
+  geom_point(data=rawgrowth,aes(x=time,y=volume*10^6,shape="no transfer data"),size=4)+
+  geom_point(data=rawreg,aes(x=time,y=volume*10^6,shape="transfer data"),size=4)+
+  geom_line(aes(y=N, color=id),size=1.5)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('tumour cells'))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen","red"),labels=c("k = 4","k = 16","no transfer"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+transfer <- subset(stats,id!="no transfer")
+
+p <- ggplot(transfer,aes(x=time, y = rate, color=id,fill=id,group=id))+
+  geom_line()+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_continuous(name=bquote('kills/ctl'),limits=c(0,25))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k = 4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+p <- ggplot(transfer,aes(x=time, y = 2*tumrad/100, color=id,fill=id,group=id))+
+  geom_line()+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_continuous(name=bquote('simulation domain length (mm)'))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k = 4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+
+p <- ggplot(transfer,aes(x=time, y = CTL, color=id,fill=id,group=id))+
+  geom_line()+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('Number of CTL'))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k = 4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+
+p <- ggplot(transfer,aes(x=time, y = con/CTL, color=id,fill=id,group=id))+
+  geom_line()+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_continuous(name=bquote('conjugate fraction'))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen"),labels=c("k = 4","k = 16"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+```
+
+
+
+
+```{r, echo=FALSE}
+
+size<-1e-6
+
+means<-read.csv('C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/mousedata/means.csv')
+growthdata <- subset(means,group=='regression')
+names(growthdata)[2]<-'id'
+setwd("C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/stats")
+library(ggplot2)
+
+
+
+data <- list()
+rates <- list()
+
+ids<-c("k = 4","k = 16", "no transfer")
+
+
+count <-1
+
+for(j in c('k4','k16','growth')){
+  output <- paste(j,'/output',sep="")
+  statfiles <- list.files(output)
+    for(i in statfiles){
+
+    filename <- paste(output,i,sep="/")
+    d<-read.csv(filename)
+    data[[count]]<-d
+    if(j=='k4') rates[[count]]<-"k = 4"
+    if(j=='k16') rates[[count]]<-"k = 16"
+    if(j=='growth') rates[[count]]<-"no transfer"
+    count <-count+1
+  }
+}
+
+means<-read.csv('C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/mousedata/means.csv')
+raw <- read.csv('C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+growthdata <- subset(means,group=='growth')
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+ldata <- data
+
+```
+
+
+``` {r,echo=FALSE}
+
+library(zoo)
+
+minMaxMed <- function(myVec){
+  
+myVec[is.na(myVec)]<-0
+med<-median(myVec)
+max<-max(myVec)
+min<-min(myVec)  
+
+return(c(min,max,med))
+  
+}
+
+ratio <- function(num,denom,scale){
+  
+  myRat <- scale*num/denom
+  stats <- minMaxMed(myRat)
+  
+  return(stats)
+    
+}
+
+getStats <- function(i,mylist){
+
+vol <- sapply(mylist, function(x) x$N[i]) 
+tcells <- sapply(mylist, function(x) x$CTL[i]) 
+con <- sapply(mylist, function(x) x$con[i])
+
+
+volS <- minMaxMed(vol)
+tcellsS <- minMaxMed(tcells)
+
+densityS <- ratio(tcells,vol,scale = 1)
+confracS <- ratio(con,tcells,scale = 1)
+
+time<-i/1440
+
+
+out <- c(time,volS,tcellsS,densityS,confracS)
+names(out)<-c("time",
+              "vmin","vmax","vmed",
+              "tmin","tmax","tmed",
+              "dmin","dmax","dmed",
+              "cmin","cmax","cmed")
+
+return(out)
+
+}
+
+parseList <- function(id,mylist){
+  
+Nrows <- max(sapply(mylist, function(x) length(x$time)))
+vdata <- lapply(1:Nrows,getStats,mylist=mylist)
+vdata <- data.frame(do.call(rbind,vdata))
+vdata <- cbind(vdata,id=rep(id,length(vdata$time)))
+
+return(vdata)
+  
+}
+
+evalByID <- function(id, ldata, rates){
+  
+indices <- (1:length(rates))[rates==id]
+d <- parseList(id,ldata[indices])
+
+return(d)
+  
+}
+
+ids <- c("k = 4", "k = 16","no transfer")
+
+pdata <- lapply(ids,evalByID,ldata=ldata,rates=rates)
+pdata <- do.call(rbind,pdata)
+pdata[pdata==Inf]<-NA
+
+model<-rep("ABM", length(pdata[,1]))
+pdata <- cbind(pdata,model)
+
+
+odedata<-read.csv("E:/figures/plotdata/f1/data.csv")
+confrac<- (odedata$tcells/odedata$tcells)
+pc<-((odedata$id=='k = 4')*4 + (odedata$id=='k = 36')*36)*(odedata$tcells/odedata$tcells)
+odedata <- cbind(odedata,confrac,pc)
+model<-rep("ODE", length(odedata[,1]))
+odedata <- cbind(odedata,model)
+
+notran <- subset(odedata,id=="k = 4")
+notran$volume<-notran$volume[1]*exp(0.859*notran$time)
+notran$id<-rep('no transfer',length(notran$time))
+odedata<-rbind(odedata,notran)
+
+```
+
+Make data frames for percent growth reduction fig
+
+```{r,echo=FALSE}
+#pdata <- read.csv('E:/figures/plotdata/f2/pdata.csv',stringsAsFactors = FALSE)
+k4 <- subset(pdata,id=="k = 4")
+k16 <- subset(pdata,id=="k = 16")
+growth <- subset(pdata,id=="no transfer")
+
+scale4 <- k4$vmed[7200]/growth$vmed[7200]
+scale16 <- k16$vmed[7200]/growth$vmed[7200]
+
+k4[,2:4]<-k4[,2:4]/(scale4*growth[,2:4])
+k16[,2:4]<-k16[,2:4]/(scale16*growth[,2:4])
+growth[,2:4]<-growth[,2:4]/growth[,2:4]
+
+
+ode4 <- subset(odedata,id=="k = 4")
+ode16 <- subset(odedata,id=="k = 16")
+odegrowth <- subset(odedata,id=="no transfer")
+
+ode4$volume<-ode4$volume/odegrowth$volume
+ode16$volume<-ode16$volume/odegrowth$volume
+odegrowth$volume<-odegrowth$volume/odegrowth$volume
+normode <- rbind(ode4,ode16,odegrowth)
+normode<-normode[normode$time>5,]
+
+normdat <- rbind(k4,k16,growth)
+normdat[normdat==0]<-NA
+normdat <- normdat[normdat$time>5,]
+
+p <- ggplot(normdat,aes(x=time,fill=id, color=id, linetype=model))+
+  geom_line(aes(y=vmed),size=1.5)+
+    geom_ribbon(aes(x = time, ymin=vmin,ymax=vmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+   geom_line(data=normode,aes(y=volume),size=1.5)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_continuous(name="tumour reduction")+
+  scale_colour_manual("id",values=c("navyblue","darkgreen","red"),labels=c("k = 4","k = 16","no transfer"))+
+  scale_fill_manual("id",values=c("navyblue","darkgreen","red"),labels=c("k = 4","k = 16","no transfer"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.15,0.40),legend.key = element_blank())
+plot(p)
+
+```
+```{r,echo=FALSE}
+
+means<-read.csv('C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/mousedata/means.csv')
+raw <- read.csv('C:/Users/richard/Documents/PhD/0_PHD_PROJECTS/00_DirectKillingInsufficentForEL4RegressionInVivo/Rev1.0/data/mousedata/mousedata.csv')
+names(raw) <- c('time','mouse','volume','id')
+growthdata <- subset(means,group=='growth')
+rawgrowth <- subset(raw,id=='growth') 
+rawreg <- subset(raw,id=="regression")
+
+```
+
+
+```{r,echo=FALSE}
+
+pdata[pdata==0]<-NA
+
+#write.csv(pdata,'E:/figures/plotdata/f2/pdata.csv',row.names = FALSE)
+#pdata <- read.csv('E:/figures/plotdata/f2/pdata.csv',stringsAsFactors = FALSE)
+
+
+p <- ggplot(pdata,aes(x=time))+
+  geom_point(data=rawgrowth,aes(x=time,y=volume*10^6,shape="no transfer data"),size=4)+
+  geom_point(data=rawreg,aes(x=time,y=volume*10^6,shape="transfer data"),size=4)+
+  geom_line(aes(y=vmed, color=id),size=1.5)+
+  geom_ribbon(data=pdata,aes(x = time, ymin=vmin,ymax=vmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(0,2,4,6,8,10,12,14))+
+  scale_y_log10(name=bquote('tumour cells'))+
+  scale_colour_manual("id",values=c("navyblue","darkgreen","red"),labels=c("k = 4","k = 16","no transfer"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.2,0.80),legend.key = element_blank())
+plot(p)
+
+transfer <- subset(pdata,id!='no transfer')
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=1-cmed),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=1-cmin,ymax=1-cmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",limits=c(5,14),breaks=c(6,8,10,12,14))+
+  scale_y_continuous(name="CTL conjugate fraction", limits=c(0,1))+
+  scale_colour_manual("id",values=c("darkgreen","navyblue"),labels=c("k = 16","k = 4"))+
+  scale_fill_manual("id",values=c("darkgreen","navyblue"),labels=c("k = 16","k = 4"))+
+  #scale_linetype_manual("model",values=c(1,6),labels=c("k = 4","k = 16","in-vivo data"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.85,0.90),legend.key = element_blank())
+plot(p)
+
+p <- ggplot(transfer,aes(x=time,fill=id, color=id))+
+  geom_line(aes(y=tmed),size=1.5)+
+  geom_ribbon(aes(x = time, ymin=tmin,ymax=tmax,alpha=0.01,linetype=NA), show.legend = FALSE)+
+  scale_x_continuous(name="days after tumour injection",breaks=c(6,8,10,12,14),limits=c(5,14))+
+  scale_y_log10(name="CTLs")+
+  scale_colour_manual("id",values=c("darkgreen","navyblue"),labels=c("k = 16","k = 4"))+
+ scale_fill_manual("id",values=c("darkgreen","navyblue"),labels=c("k = 16","k = 4"))+
+  #scale_linetype_manual("model",values=c(1,6),labels=c("k = 4","k = 36","in-vivo data"))+
+ theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"),legend.title = element_blank(),legend.position=c(0.15,0.85),legend.key = element_blank())
+plot(p)
+
+
+```
+
+
+```{r, echo=FALSE}
+require(ggplot2)
+
+frames <- 1440*c(8,14)
+
+mousedata <- data.frame(time=c(7,10,12,14), volume=c(0.37,17.2,47,163))
+mousedata$ cells <- mousedata$volume*10^6
+
+setwd("E:/ABM_CODE/fig2_repeats/k4_im/output")
+
+slices <- lapply(frames, function(i) read.csv(paste("slice_",toString(i),".csv",sep="")))
+slices<-lapply(1:length(frames), function(i) cbind(slices[[i]],frame = rep(toString(frames[i]),length(slices[[i]]$x))))
+
+
+
+p<-ggplot(data=slices[[1]],aes(x=z,y=y,fill=var))+
+  geom_raster()+
+  coord_cartesian(xlim = c(-0,150), ylim = c(-0,150))+
+  scale_fill_manual(values=c("yellow","red","blue"))+
+     theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_rect(fill="grey"), axis.line = element_line(colour = "black"),legend.title = element_blank())
+p
+
+plot(p)
+
+p<-ggplot(data=slices[[2]],aes(x=z,y=y,fill=var))+
+  geom_raster()+
+  coord_cartesian(xlim = c(-450,450), ylim = c(-450,450))+
+  scale_fill_manual(values=c("yellow","red","blue"))+
+     theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_rect(fill="grey"), axis.line = element_line(colour = "black"),legend.title = element_blank())
+p
+
+p<-ggplot(data=slices[[2]],aes(x=z,y=y,fill=var))+
+  geom_raster()+
+  coord_cartesian(xlim = c(-0,350), ylim = c(0,350))+
+  scale_fill_manual(values=c("yellow","red","blue"))+
+     theme(text = element_text(size=20),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_rect(fill="grey"), axis.line = element_line(colour = "black"),legend.title = element_blank())
+p
+
+
+plot(p)
+
+
+```
+```{r echo=FALSE}
+
+library(ggplot2)
+
+
+tcells <- last[last$var=='ctl',]
+eg7 <- last[last$var==7,]
+dead <- last[last$var=='dead',]
+
+
+
+plt <- ggplot()+
+  coord_fixed()+
+  geom_point(data=eg7,aes(x=z,y=y,color="tumour"),color="yellow1",shape=15,size=1.6)+
+  geom_point(data=dead,aes(x=z,y=y,color="dead"),color="blue",shape=15,size=1.6)+
+  geom_point(data=tcells,aes(x=z,y=y,color="T cell"),color="red",shape=15,size=1.6)+
+  scale_shape_discrete(solid=T)+
+  scale_x_continuous(limits = c(-400,400))+
+  scale_y_continuous(limits = c(-400,400))+
+  theme(text = element_text(size=20),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill="black"), 
+        
+        legend.title = element_blank(),
+        legend.key = element_blank())
+  
+plt
+
+
+
+```

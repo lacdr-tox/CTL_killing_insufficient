@@ -1,0 +1,37 @@
+The agent based model source files are contained inside the template_build folder.
+
+After building the model, executable called ModuleABM should appear. 
+
+To run the model, a configuration file is required. Config files for the settings used in the Cancer Research paper can be found in the template_build folder.
+
+The parameters in the config files are (described in brackets):
+
+ri 12 (initial radius to put tumour cells inside)
+ni 180 (number of tumour cells to initialise)
+rg 1.97 (tumour growth rate)
+rd .125 (dispersal probability for tumour cells dispersing away from the tumour)
+dd .35 (distance for dispersing tumour cells to travel)
+k 16 (killing rate)
+pcon 0.5 (probability CTL recognises tumour cell)
+pdet 0.05 (probability CTL detatches from tumour cell)
+hits 5 (number of hits)
+deg 2 (disappearance rate of killed tumour cells)
+ctl 1 (boolean - are CTLs in the model?)
+ifn 1 (boolean - have IFN in the model)
+dsteps 1 (how many smoothing steps to apply to IFN diffusion)
+f 1200 (IFN production)
+tifn 1 (threshold for IFN effect to take place)
+D 750 (diffusion constant for IFN)
+rdeg 0.33 (background disappearance rate of IFN)
+rc 0.1  (consumption rate of IFN by tumour cells)
+mix 0 (set = 1 to generate mixed tumours with antigen positive/negative cells)
+edge 0 (boolean, do CTLs infiltrate from the edge of the tumour?)
+gsize 601 (size of array allocated for the tumour. Handy to have this as small as possible while still containing the tumour. The array cannot dynamically resize so things go wrong if this is exceeded at runtime)
+video 1 (boolean - outputs extra detailed data which could be used for visualising the tumour)
+Nthreads 6 (number of threads to use multithreaded)
+
+To run the model you need a config file and it MUST be renamed to "parms.csv". Furthermore, you MUST have a folder named "output" in the same directory as parms.csv. Then run using:
+
+./ModuleABM /path/to/parms.csv
+
+This will generate the stats files used to generate plots for the paper.
